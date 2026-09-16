@@ -1,0 +1,213 @@
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LP = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local State = {
+    LockPlayer = false,
+    LockHead = false,
+    InfiniteJump = false,
+    ESP = false,
+    Speed = 16
+}
+
+-- GUI
+local GUI = Instance.new("ScreenGui")
+GUI.Name = "FiveFunctions"
+GUI.ResetOnSpawn = false
+GUI.Parent = LP:WaitForChild("PlayerGui")
+
+local Frame = Instance.new("Frame")
+Frame.Size = UDim2.fromOffset(250, 330)
+Frame.Position = UDim2.new(0, 20, 0.5, -165)
+Frame.Parent = GUI
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "5 Functions"
+Title.TextSize = 20
+Title.Parent = Frame
+
+local function MakeButton(text, y)
+    local B = Instance.new("TextButton")
+    B.Size = UDim2.new(1, -20, 0, 42)
+    B.Position = UDim2.fromOffset(10, y)
+    B.Text = text
+    B.TextSize = 16
+    B.Parent = Frame
+    return B
+end
+
+local Lock = MakeButton("Lock Player : OFF", 50)
+local Speed = MakeButton("Speed : 16", 100)
+local Jump = MakeButton("Infinite Jump : OFF", 150)
+local ESP = MakeButton("ESP : OFF", 200)
+local Head = MakeButton("Lock Head : OFF", 250)
+
+-- หา Player ฝั่งตรงข้ามที่ใกล้ที่สุด
+local function GetTarget()
+    local MyChar = LP.Character
+    local MyRoot = MyChar and MyChar:FindFirstChild("HumanoidRootPart")
+    if not MyRoot then return end
+
+    local Target
+    local MinDistance = math.huge
+
+    for _, P in ipairs(Players:GetPlayers()) do
+        if P ~= LP and P.Character then
+
+            -- ถ้าเกมมี Team จะเลือกเฉพาะทีมตรงข้าม
+            local Enemy = true
+            if LP.Team and P.Team then
+                Enemy = LP.Team ~= P.Team
+            end
+
+            local Root = P.Character:FindFirstChild("HumanoidRootPart")
+            local Hum = P.Character:FindFirstChildOfClass("Humanoid")
+
+            if Enemy and Root and Hum and Hum.Health > 0 then
+                local Distance =
+                    (Root.Position - MyRoot.Position).Magnitude
+
+                if Distance < MinDistance then
+                    MinDistance = Distance
+                    Target = P
+                end
+            end
+        end
+    end
+
+    return Target
+end
+
+-- 1. Lock Player
+Lock.MouseButton1Click:Connect(function()
+    State.LockPlayer = not State.LockPlayer
+
+    Lock.Text =
+        "Lock Player : " ..
+        (State.LockPlayer and "ON" or "OFF")
+end)
+
+-- 2. Speed 1-100
+Speed.MouseButton1Click:Connect(function()
+    State.Speed += 10
+
+    if State.Speed > 100 then
+        State.Speed = 1
+    end
+
+    Speed.Text = "Speed : " .. State.Speed
+
+    local Char = LP.Character
+    local Hum = Char and Char:FindFirstChildOfClass("Humanoid")
+
+    if Hum then
+        Hum.WalkSpeed = State.Speed
+    end
+end)
+
+-- Speed หลังเกิดใหม่
+LP.CharacterAdded:Connect(function(Char)
+    local Hum = Char:WaitForChild("Humanoid")
+    Hum.WalkSpeed = State.Speed
+end)
+
+-- 3. Infinite Jump
+Jump.MouseButton1Click:Connect(function()
+    State.InfiniteJump = not State.InfiniteJump
+
+    Jump.Text =
+        "Infinite Jump : " ..
+        (State.InfiniteJump and "ON" or "OFF")
+end)
+
+UIS.JumpRequest:Connect(function()
+    if not State.InfiniteJump then return end
+
+    local Char = LP.Character
+    local Hum = Char and Char:FindFirstChildOfClass("Humanoid")
+
+    if Hum then
+        Hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end
+end)
+
+-- 4. ESP
+local function UpdateESP()
+    for _, P in ipairs(Players:GetPlayers()) do
+        if P ~= LP and P.Character then
+
+            local H = P.Character:FindFirstChild("PlayerESP")
+
+            if State.ESP and not H then
+                H = Instance.new("Highlight")
+                H.Name = "PlayerESP"
+                H.FillTransparency = 0.5
+                H.OutlineTransparency = 0
+                H.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+                H.Parent = P.Character
+
+            elseif not State.ESP and H then
+                H:Destroy()
+            end
+        end
+    end
+end
+
+ESP.MouseButton1Click:Connect(function()
+    State.ESP = not State.ESP
+
+    ESP.Text =
+        "ESP : " ..
+        (State.ESP and "ON" or "OFF")
+
+    UpdateESP()
+end)
+
+-- 5. Lock Head
+Head.MouseButton1Click:Connect(function()
+    State.LockHead = not State.LockHead
+
+    Head.Text =
+        "Lock Head : " ..
+        (State.LockHead and "ON" or "OFF")
+end)
+
+-- ระบบล็อกกล้อง
+RunService.RenderStepped:Connect(function()
+    local Target = GetTarget()
+
+    if not Target or not Target.Character then
+        return
+    end
+
+    if State.LockHead then
+        local TargetHead =
+            Target.Character:FindFirstChild("Head")
+
+        if TargetHead then
+            Camera.CFrame = CFrame.lookAt(
+                Camera.CFrame.Position,
+                TargetHead.Position
+            )
+        end
+
+    elseif State.LockPlayer then
+        local TargetRoot =
+            Target.Character:FindFirstChild("HumanoidRootPart")
+
+        if TargetRoot then
+            Camera.CFrame = CFrame.lookAt(
+                Camera.CFrame.Position,
+                TargetRoot.Position
+            )
+        end
+    end
+
+    if State.ESP then
+        UpdateESP()
+    end
+end)
